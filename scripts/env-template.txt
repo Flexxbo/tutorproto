@@ -1,0 +1,20 @@
+# Database
+POSTGRES_URL=your_postgres_connection_string
+
+# Application
+BASE_URL=http://localhost:3000
+AUTH_SECRET=your_auth_secret_key
+
+# ElevenLabs Configuration
+ELEVEN_AGENT_ID_INTERVIEW=your_default_interview_agent_id
+ELEVEN_AGENT_ID_PROFIL1=your_profile1_agent_id
+ELEVEN_AGENT_ID_PROFIL2=your_profile2_agent_id
+ELEVEN_AGENT_ID_PROFIL3=your_profile3_agent_id
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key
+
+# Supabase
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_URL=your_supabase_project_url 

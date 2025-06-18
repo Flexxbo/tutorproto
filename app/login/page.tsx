@@ -19,13 +19,28 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate login process
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      })
 
-    // For demo purposes, accept any credentials
-    if (username && password) {
-      localStorage.setItem("isLoggedIn", "true")
-      router.push("/dashboard")
+      const data = await response.json()
+
+      if (data.success) {
+        // Store user data in localStorage
+        localStorage.setItem("isLoggedIn", "true")
+        localStorage.setItem("interview_app_user", JSON.stringify(data.user))
+        router.push("/dashboard")
+      } else {
+        alert(data.message || 'Login failed')
+      }
+    } catch (error) {
+      console.error('Login error:', error)
+      alert('Login failed. Please try again.')
     }
 
     setIsLoading(false)

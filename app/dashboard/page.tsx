@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("idle")
   const [sessionTime, setSessionTime] = useState(0)
-  const [remainingMinutes, setRemainingMinutes] = useState(25)
+  const [remainingMinutes, setRemainingMinutes] = useState(0)
   const [selectedProfile, setSelectedProfile] = useState("")
   const [userName, setUserName] = useState("")
   const [jobDescription, setJobDescription] = useState("")
@@ -35,6 +35,17 @@ export default function Dashboard() {
       router.push("/login")
     } else {
       setIsLoggedIn(true)
+      
+      // Load user data from localStorage
+      const userData = localStorage.getItem("interview_app_user")
+      if (userData) {
+        try {
+          const user = JSON.parse(userData)
+          setRemainingMinutes(Math.floor(user.remaining_seconds / 60))
+        } catch (error) {
+          console.error('Error parsing user data:', error)
+        }
+      }
     }
   }, [router])
 
