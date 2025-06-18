@@ -30,6 +30,11 @@ export default function Dashboard() {
   const [feedback, setFeedback] = useState("")
   const [showFeedback, setShowFeedback] = useState(false)
   const [conversationUrl, setConversationUrl] = useState<string | null>(null)
+  const [pausedSessionData, setPausedSessionData] = useState<{
+    selectedProfile: string;
+    signedUrl: string;
+    overrides: any;
+  } | null>(null)
   const router = useRouter()
 
   // ElevenLabs conversation hook
@@ -157,23 +162,33 @@ export default function Dashboard() {
           throw new Error(data.message)
         }
 
-        // Start ElevenLabs conversation with personalized overrides
-        setConversationUrl(data.signed_url)
-        await conversation.startSession({ 
-          signedUrl: data.signed_url,
-          overrides: {
-            agent: {
-              prompt: {
-                prompt: `You are conducting a professional job interview for the position described below. The candidate's name is ${userName || 'the candidate'}. Be professional, encouraging, and ask relevant questions based on the job description.
+        // Prepare conversation overrides
+        const conversationOverrides = {
+          agent: {
+            prompt: {
+              prompt: `You are conducting a professional job interview for the position described below. The candidate's name is ${userName || 'the candidate'}. Be professional, encouraging, and ask relevant questions based on the job description.
 
 Job Description:
 ${jobDescription || 'General interview questions'}
 
 Conduct a thorough but friendly interview, asking about experience, skills, and motivation. Keep responses concise and natural.`
-              },
-              firstMessage: `Hello ${userName || 'there'}! I'm excited to interview you today for this position. I've reviewed the job description and I'm looking forward to learning more about your background and experience. Are you ready to begin?`
-            }
+            },
+            firstMessage: `Hello ${userName || 'there'}! I'm excited to interview you today for this position. I've reviewed the job description and I'm looking forward to learning more about your background and experience. Are you ready to begin?`
           }
+        }
+
+        // Start ElevenLabs conversation with personalized overrides
+        setConversationUrl(data.signed_url)
+        await conversation.startSession({ 
+          signedUrl: data.signed_url,
+          overrides: conversationOverrides
+        })
+
+        // Store session data for potential pause/resume
+        setPausedSessionData({
+          selectedProfile: selectedProfile,
+          signedUrl: data.signed_url,
+          overrides: conversationOverrides
         })
         
       } catch (error) {
@@ -182,13 +197,31 @@ Conduct a thorough but friendly interview, asking about experience, skills, and 
         setSessionStatus("idle")
       }
     } else if (sessionStatus === "paused") {
-      // Resume conversation (if supported by SDK)
-      setSessionStatus("running")
+      // Resume conversation using stored session data
+      if (pausedSessionData) {
+        try {
+          setSessionStatus("connected")
+          await conversation.startSession({ 
+            signedUrl: pausedSessionData.signedUrl,
+            overrides: pausedSessionData.overrides
+          })
+        } catch (error) {
+          console.error('Failed to resume session:', error)
+          alert(`Failed to resume interview: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          setSessionStatus("paused")
+        }
+      }
     }
   }
 
-  const handlePauseSession = () => {
-    setSessionStatus("paused")
+  const handlePauseSession = async () => {
+    try {
+      // End the current conversation to actually pause
+      await conversation.endSession()
+      setSessionStatus("paused")
+    } catch (error) {
+      console.error('Failed to pause session:', error)
+    }
   }
 
   const handleEndSession = async () => {
@@ -198,6 +231,12 @@ Conduct a thorough but friendly interview, asking about experience, skills, and 
       
       setSessionStatus("ended")
       setShowFeedback(true)
+      
+      // Clear paused session data since interview is ending
+      setPausedSessionData(null)
+
+      // Deduct credits based on interview duration
+      await deductCredits()
 
       // Generate real feedback using transcript
       generateFeedback()
@@ -205,6 +244,42 @@ Conduct a thorough but friendly interview, asking about experience, skills, and 
     } catch (error) {
       console.error('Error ending session:', error)
       setSessionStatus("ended")
+    }
+  }
+
+  const deductCredits = async () => {
+    try {
+      // Get user data from localStorage
+      const userData = localStorage.getItem("interview_app_user")
+      if (!userData) return
+
+      const user = JSON.parse(userData)
+      
+      // Deduct credits based on session duration
+      const response = await fetch('/api/users/update-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          seconds_used: sessionTime
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        // Update remaining minutes in UI
+        setRemainingMinutes(Math.floor(data.remaining_seconds / 60))
+        
+        // Update user data in localStorage
+        const updatedUser = { ...user, remaining_seconds: data.remaining_seconds }
+        localStorage.setItem("interview_app_user", JSON.stringify(updatedUser))
+        
+        console.log(`Credits deducted: ${data.seconds_deducted} seconds`)
+      } else {
+        console.error('Failed to deduct credits:', data.message)
+      }
+    } catch (error) {
+      console.error('Error deducting credits:', error)
     }
   }
 
@@ -243,6 +318,7 @@ Conduct a thorough but friendly interview, asking about experience, skills, and 
     setTranscript([])
     setFeedback("")
     setShowFeedback(false)
+    setPausedSessionData(null)
   }
 
   const formatTime = (seconds: number) => {
