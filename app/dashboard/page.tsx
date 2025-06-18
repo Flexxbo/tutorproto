@@ -157,10 +157,23 @@ export default function Dashboard() {
           throw new Error(data.message)
         }
 
-        // Start ElevenLabs conversation
+        // Start ElevenLabs conversation with personalized overrides
         setConversationUrl(data.signed_url)
         await conversation.startSession({ 
-          signedUrl: data.signed_url 
+          signedUrl: data.signed_url,
+          overrides: {
+            agent: {
+              prompt: {
+                prompt: `You are conducting a professional job interview for the position described below. The candidate's name is ${userName || 'the candidate'}. Be professional, encouraging, and ask relevant questions based on the job description.
+
+Job Description:
+${jobDescription || 'General interview questions'}
+
+Conduct a thorough but friendly interview, asking about experience, skills, and motivation. Keep responses concise and natural.`
+              },
+              firstMessage: `Hello ${userName || 'there'}! I'm excited to interview you today for this position. I've reviewed the job description and I'm looking forward to learning more about your background and experience. Are you ready to begin?`
+            }
+          }
         })
         
       } catch (error) {
