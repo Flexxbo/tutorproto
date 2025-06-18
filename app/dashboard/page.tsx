@@ -37,6 +37,9 @@ export default function Dashboard() {
   } | null>(null)
   const [isResuming, setIsResuming] = useState(false)
   const [hasBeenStarted, setHasBeenStarted] = useState(false)
+  const [lowCreditWarningShown, setLowCreditWarningShown] = useState(false)
+  const [realTimeCredits, setRealTimeCredits] = useState(0) // Real-time credit tracking
+  const [lastCreditUpdate, setLastCreditUpdate] = useState(0) // Track when we last updated DB
   const router = useRouter()
 
   // ElevenLabs conversation hook
@@ -79,6 +82,7 @@ export default function Dashboard() {
         try {
           const user = JSON.parse(userData)
           setRemainingMinutes(Math.floor(user.remaining_seconds / 60))
+          setRealTimeCredits(user.remaining_seconds) // Initialize real-time credits
         } catch (error) {
           console.error('Error parsing user data:', error)
         }
@@ -111,15 +115,83 @@ export default function Dashboard() {
     }
   }
 
+  // Real-time countdown and credit management
   useEffect(() => {
     let interval: NodeJS.Timeout
+    let creditUpdateInterval: NodeJS.Timeout
+    
     if (sessionStatus === "running") {
+      // Update session time and countdown credits every second
       interval = setInterval(() => {
         setSessionTime((prev) => prev + 1)
+        setRealTimeCredits((prev) => {
+          const newCredits = Math.max(0, prev - 1)
+          
+          // Auto-end when credits hit zero
+          if (newCredits <= 0) {
+            setTimeout(async () => {
+              alert('Credits depleted. Ending interview automatically.')
+              await handleEndSession()
+            }, 100)
+          }
+          
+          // Show warning when 2 minutes or less remaining
+          const remainingMinutes = Math.floor(newCredits / 60)
+          if (remainingMinutes <= 2 && remainingMinutes > 0 && !lowCreditWarningShown && newCredits > 0) {
+            alert(`Warning: Only ${remainingMinutes} minute(s) remaining. Your interview will end automatically when credits are depleted.`)
+            setLowCreditWarningShown(true)
+          }
+          
+          return newCredits
+        })
       }, 1000)
+
+      // Update database every 60 seconds
+      creditUpdateInterval = setInterval(async () => {
+        const currentTime = Date.now()
+        const timeSinceLastUpdate = Math.floor((currentTime - lastCreditUpdate) / 1000)
+        
+        if (timeSinceLastUpdate >= 60) {
+          try {
+            const userData = localStorage.getItem("interview_app_user")
+            if (!userData) return
+
+            const user = JSON.parse(userData)
+            
+            const response = await fetch('/api/users/update-credits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: user.id,
+                seconds_used: timeSinceLastUpdate
+              })
+            })
+
+            const data = await response.json()
+            if (data.success) {
+              // Sync real-time credits with database
+              setRealTimeCredits(data.remaining_seconds)
+              setRemainingMinutes(Math.floor(data.remaining_seconds / 60))
+              setLastCreditUpdate(currentTime)
+              
+              // Update localStorage
+              const updatedUser = { ...user, remaining_seconds: data.remaining_seconds }
+              localStorage.setItem("interview_app_user", JSON.stringify(updatedUser))
+              
+              console.log(`Database updated: ${data.seconds_deducted} seconds deducted`)
+            }
+          } catch (error) {
+            console.error('Error updating credits in database:', error)
+          }
+        }
+      }, 60000) // Check every minute
     }
-    return () => clearInterval(interval)
-  }, [sessionStatus])
+    
+    return () => {
+      clearInterval(interval)
+      clearInterval(creditUpdateInterval)
+    }
+  }, [sessionStatus, lastCreditUpdate, lowCreditWarningShown])
 
   const buildDynamicVariables = () => {
     // Build transcript for previous
@@ -156,6 +228,12 @@ export default function Dashboard() {
       // Check if profile is selected
       if (!selectedProfile) {
         alert('Please select a profile first')
+        return
+      }
+
+      // Check credits before starting session
+      if (realTimeCredits <= 0) {
+        alert('Insufficient credits. Please top up your account to start an interview.')
         return
       }
 
@@ -209,6 +287,8 @@ export default function Dashboard() {
         // Mark as started for future resumes
         setHasBeenStarted(true)
         setIsResuming(false)
+        setLowCreditWarningShown(false) // Reset warning flag for new session
+        setLastCreditUpdate(Date.now()) // Initialize credit update timer
 
 
         
@@ -286,29 +366,36 @@ export default function Dashboard() {
       if (!userData) return
 
       const user = JSON.parse(userData)
-      
-      // Deduct credits based on session duration
-      const response = await fetch('/api/users/update-credits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          seconds_used: sessionTime
-        })
-      })
 
-      const data = await response.json()
-      if (data.success) {
-        // Update remaining minutes in UI
-        setRemainingMinutes(Math.floor(data.remaining_seconds / 60))
-        
-        // Update user data in localStorage
-        const updatedUser = { ...user, remaining_seconds: data.remaining_seconds }
-        localStorage.setItem("interview_app_user", JSON.stringify(updatedUser))
-        
-        console.log(`Credits deducted: ${data.seconds_deducted} seconds`)
-      } else {
-        console.error('Failed to deduct credits:', data.message)
+      // Calculate any remaining seconds since last database update
+      const currentTime = Date.now()
+      const timeSinceLastUpdate = Math.floor((currentTime - lastCreditUpdate) / 1000)
+      
+      // Only deduct if there are remaining seconds not yet captured by the interval updates
+      if (timeSinceLastUpdate > 0) {
+        const response = await fetch('/api/users/update-credits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.id,
+            seconds_used: timeSinceLastUpdate
+          })
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          // Update remaining minutes in UI
+          setRemainingMinutes(Math.floor(data.remaining_seconds / 60))
+          setRealTimeCredits(data.remaining_seconds)
+          
+          // Update user data in localStorage
+          const updatedUser = { ...user, remaining_seconds: data.remaining_seconds }
+          localStorage.setItem("interview_app_user", JSON.stringify(updatedUser))
+          
+          console.log(`Final credits deducted: ${data.seconds_deducted} seconds`)
+        } else {
+          console.error('Failed to deduct credits:', data.message)
+        }
       }
     } catch (error) {
       console.error('Error deducting credits:', error)
@@ -353,12 +440,26 @@ export default function Dashboard() {
     setPausedSessionData(null)
     setHasBeenStarted(false)
     setIsResuming(false)
+    setLowCreditWarningShown(false)
+    setLastCreditUpdate(0)
   }
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+
+  const formatTimeRemaining = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+    } else {
+      return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+    }
   }
 
   const getStatusText = () => {
@@ -413,9 +514,14 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Interview Trainer – Prototype</h1>
           <div className="flex items-center gap-4">
-            <Badge variant="outline" className="text-sm">
+            <Badge 
+              variant={realTimeCredits <= 120 ? "destructive" : "outline"} 
+              className={`text-sm ${realTimeCredits <= 120 ? 'animate-pulse' : ''}`}
+            >
               <Clock className="w-4 h-4 mr-1" />
-              Remaining Minutes: {remainingMinutes}
+              Time Remaining: {formatTimeRemaining(realTimeCredits)}
+              {realTimeCredits <= 120 && realTimeCredits > 0 && " ⚠️"}
+              {realTimeCredits === 0 && " ❌"}
             </Badge>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" />
@@ -483,9 +589,13 @@ export default function Dashboard() {
 
                     <div className="flex gap-2">
                       {sessionStatus === "idle" && (
-                        <Button onClick={handleStartSession} className="flex-1">
+                        <Button 
+                          onClick={handleStartSession} 
+                          className="flex-1"
+                          disabled={realTimeCredits <= 0}
+                        >
                           <Play className="w-4 h-4 mr-2" />
-                          Start
+                          {realTimeCredits <= 0 ? "Insufficient Credits" : "Start"}
                         </Button>
                       )}
                       {sessionStatus === "running" && (
