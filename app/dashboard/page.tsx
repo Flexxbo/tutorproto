@@ -35,6 +35,7 @@ export default function Dashboard() {
     signedUrl: string;
     overrides: any;
   } | null>(null)
+
   const router = useRouter()
 
   // ElevenLabs conversation hook
@@ -119,6 +120,8 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [sessionStatus])
 
+
+
   const handleLogout = () => {
     localStorage.removeItem("isLoggedIn")
     router.push("/login")
@@ -162,34 +165,20 @@ export default function Dashboard() {
           throw new Error(data.message)
         }
 
-        // Prepare conversation overrides
-        const conversationOverrides = {
-          agent: {
-            prompt: {
-              prompt: `You are conducting a professional job interview for the position described below. The candidate's name is ${userName || 'the candidate'}. Be professional, encouraging, and ask relevant questions based on the job description.
-
-Job Description:
-${jobDescription || 'General interview questions'}
-
-Conduct a thorough but friendly interview, asking about experience, skills, and motivation. Keep responses concise and natural.`
-            },
-            firstMessage: `Hello ${userName || 'there'}! I'm excited to interview you today for this position. I've reviewed the job description and I'm looking forward to learning more about your background and experience. Are you ready to begin?`
-          }
-        }
-
-        // Start ElevenLabs conversation with personalized overrides
+        // Start ElevenLabs conversation
         setConversationUrl(data.signed_url)
         await conversation.startSession({ 
-          signedUrl: data.signed_url,
-          overrides: conversationOverrides
+          signedUrl: data.signed_url
         })
 
         // Store session data for potential pause/resume
         setPausedSessionData({
           selectedProfile: selectedProfile,
           signedUrl: data.signed_url,
-          overrides: conversationOverrides
+          overrides: {}
         })
+
+
         
       } catch (error) {
         console.error('Failed to start session:', error)
@@ -201,9 +190,9 @@ Conduct a thorough but friendly interview, asking about experience, skills, and 
       if (pausedSessionData) {
         try {
           setSessionStatus("connected")
+          
           await conversation.startSession({ 
-            signedUrl: pausedSessionData.signedUrl,
-            overrides: pausedSessionData.overrides
+            signedUrl: pausedSessionData.signedUrl
           })
         } catch (error) {
           console.error('Failed to resume session:', error)
