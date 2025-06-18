@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [sessionTime, setSessionTime] = useState(0)
   const [remainingMinutes, setRemainingMinutes] = useState(0)
   const [selectedProfile, setSelectedProfile] = useState("")
+  const [profiles, setProfiles] = useState<Array<{ id: string; name: string; job_title: string; job_description: string; elevenlabs_agent_id: string }>>([])
   const [userName, setUserName] = useState("")
   const [jobDescription, setJobDescription] = useState("")
   const [cvInfo, setCvInfo] = useState("")
@@ -46,8 +47,33 @@ export default function Dashboard() {
           console.error('Error parsing user data:', error)
         }
       }
+      
+      // Load profiles from API
+      loadProfiles()
     }
   }, [router])
+
+  const loadProfiles = async () => {
+    try {
+      const response = await fetch('/api/profiles')
+      const data = await response.json()
+      if (data.success) {
+        setProfiles(data.profiles)
+      }
+    } catch (error) {
+      console.error('Error loading profiles:', error)
+    }
+  }
+
+  const handleProfileChange = (profileId: string) => {
+    setSelectedProfile(profileId)
+    
+    // Auto-populate job description based on selected profile
+    const selectedProfileData = profiles.find(p => p.id === profileId)
+    if (selectedProfileData) {
+      setJobDescription(selectedProfileData.job_description)
+    }
+  }
 
   useEffect(() => {
     let interval: NodeJS.Timeout
@@ -302,15 +328,16 @@ export default function Dashboard() {
 
                   <div className="space-y-2">
                     <Label htmlFor="profile">Profile Selection</Label>
-                    <Select value={selectedProfile} onValueChange={setSelectedProfile}>
+                    <Select value={selectedProfile} onValueChange={handleProfileChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Choose a profile" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="individual">Individual</SelectItem>
-                        <SelectItem value="profile1">Profile 1 - Software Developer</SelectItem>
-                        <SelectItem value="profile2">Profile 2 - Marketing Manager</SelectItem>
-                        <SelectItem value="profile3">Profile 3 - Project Manager</SelectItem>
+                        {profiles.map((profile) => (
+                          <SelectItem key={profile.id} value={profile.id}>
+                            {profile.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
