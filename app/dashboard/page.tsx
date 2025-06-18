@@ -35,7 +35,8 @@ export default function Dashboard() {
     signedUrl: string;
     overrides: any;
   } | null>(null)
-
+  const [isResuming, setIsResuming] = useState(false)
+  const [hasBeenStarted, setHasBeenStarted] = useState(false)
   const router = useRouter()
 
   // ElevenLabs conversation hook
@@ -120,7 +121,30 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [sessionStatus])
 
-
+  const buildDynamicVariables = () => {
+    // Build transcript for previous
+    const transcriptText = transcript.length > 0 
+      ? transcript.map(entry => `${entry.speaker}: ${entry.text}`).join('\n')
+      : "none"
+      
+    // Determine first message based on state
+    let firstMessage
+    if (!hasBeenStarted) {
+      firstMessage = `Hello ${userName || 'there'}! I'm excited to interview you today for this position. I've reviewed the job description and I'm looking forward to learning more about your background and experience. Are you ready to begin?`
+    } else if (isResuming) {
+      firstMessage = "We were briefly interrupted. Let's continue where we left off."
+    } else {
+      firstMessage = `Hello ${userName || 'there'}! Let's continue our interview.`
+    }
+    
+    return {
+      user_name: userName || "the candidate",
+      previous: transcriptText,
+      job_description: jobDescription || "general position", 
+      user_info: cvInfo || "none",
+      first_message: firstMessage
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("isLoggedIn")
@@ -165,18 +189,26 @@ export default function Dashboard() {
           throw new Error(data.message)
         }
 
-        // Start ElevenLabs conversation
+        // Build dynamic variables based on current state
+        const dynamicVars = buildDynamicVariables()
+
+        // Start ElevenLabs conversation with dynamic variables
         setConversationUrl(data.signed_url)
         await conversation.startSession({ 
-          signedUrl: data.signed_url
+          signedUrl: data.signed_url,
+          dynamicVariables: dynamicVars
         })
 
         // Store session data for potential pause/resume
         setPausedSessionData({
           selectedProfile: selectedProfile,
           signedUrl: data.signed_url,
-          overrides: {}
+          overrides: dynamicVars
         })
+
+        // Mark as started for future resumes
+        setHasBeenStarted(true)
+        setIsResuming(false)
 
 
         
@@ -191,8 +223,19 @@ export default function Dashboard() {
         try {
           setSessionStatus("connected")
           
+          // Set resuming flag and build new dynamic variables with transcript
+          setIsResuming(true)
+          const resumeVars = buildDynamicVariables()
+
           await conversation.startSession({ 
-            signedUrl: pausedSessionData.signedUrl
+            signedUrl: pausedSessionData.signedUrl,
+            dynamicVariables: resumeVars
+          })
+
+          // Update stored session data with new variables
+          setPausedSessionData({
+            ...pausedSessionData,
+            overrides: resumeVars
           })
         } catch (error) {
           console.error('Failed to resume session:', error)
@@ -308,6 +351,8 @@ export default function Dashboard() {
     setFeedback("")
     setShowFeedback(false)
     setPausedSessionData(null)
+    setHasBeenStarted(false)
+    setIsResuming(false)
   }
 
   const formatTime = (seconds: number) => {
