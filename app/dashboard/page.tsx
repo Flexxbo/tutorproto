@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useConversation } from "@elevenlabs/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,7 +29,35 @@ export default function Dashboard() {
   const [transcript, setTranscript] = useState<Array<{ speaker: string; text: string; time: string }>>([])
   const [feedback, setFeedback] = useState("")
   const [showFeedback, setShowFeedback] = useState(false)
+  const [conversationUrl, setConversationUrl] = useState<string | null>(null)
   const router = useRouter()
+
+  // ElevenLabs conversation hook
+  const conversation = useConversation({
+    onConnect: () => {
+      console.log('Connected to ElevenLabs')
+      setSessionStatus("running")
+    },
+    onDisconnect: () => {
+      console.log('Disconnected from ElevenLabs')
+      setSessionStatus("ended")
+    },
+    onMessage: (message) => {
+      console.log('Message received:', message)
+      
+      // Add message to transcript
+      const timestamp = new Date().toLocaleTimeString()
+      setTranscript(prev => [...prev, {
+        speaker: message.source === 'user' ? 'You' : 'AI Trainer',
+        text: message.message || '',
+        time: timestamp
+      }])
+    },
+    onError: (error) => {
+      console.error('ElevenLabs error:', error)
+      setSessionStatus("ended")
+    }
+  })
 
   useEffect(() => {
     const loggedIn = localStorage.getItem("isLoggedIn")
@@ -90,22 +119,57 @@ export default function Dashboard() {
     router.push("/login")
   }
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
     if (sessionStatus === "idle") {
-      setSessionStatus("connected")
-      setShowFeedback(false)
-      setTimeout(() => {
-        setSessionStatus("running")
-        // Simulate initial AI message
-        setTranscript([
-          {
-            speaker: "AI Trainer",
-            text: `Hello ${userName || "there"}! Nice to have you here today. Are you ready for your interview?`,
-            time: new Date().toLocaleTimeString(),
-          },
-        ])
-      }, 2000)
+      // Check if profile is selected
+      if (!selectedProfile) {
+        alert('Please select a profile first')
+        return
+      }
+
+      // Get the agent ID for the selected profile
+      const selectedProfileData = profiles.find(p => p.id === selectedProfile)
+      if (!selectedProfileData) {
+        alert('Invalid profile selected')
+        return
+      }
+
+      try {
+        setSessionStatus("connected")
+        setShowFeedback(false)
+        setTranscript([]) // Clear previous transcript
+
+        // Request microphone permission first
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+
+        // Get signed URL from our API
+        const response = await fetch('/api/elevenlabs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent_id: selectedProfileData.elevenlabs_agent_id,
+            action: 'get_signed_url'
+          })
+        })
+
+        const data = await response.json()
+        if (!data.success) {
+          throw new Error(data.message)
+        }
+
+        // Start ElevenLabs conversation
+        setConversationUrl(data.signed_url)
+        await conversation.startSession({ 
+          signedUrl: data.signed_url 
+        })
+        
+      } catch (error) {
+        console.error('Failed to start session:', error)
+        alert(`Failed to start interview: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        setSessionStatus("idle")
+      }
     } else if (sessionStatus === "paused") {
+      // Resume conversation (if supported by SDK)
       setSessionStatus("running")
     }
   }
@@ -114,28 +178,50 @@ export default function Dashboard() {
     setSessionStatus("paused")
   }
 
-  const handleEndSession = () => {
-    setSessionStatus("ended")
-    setShowFeedback(true)
+  const handleEndSession = async () => {
+    try {
+      // End ElevenLabs conversation
+      await conversation.endSession()
+      
+      setSessionStatus("ended")
+      setShowFeedback(true)
 
-    // Simulate feedback generation delay
-    setTimeout(() => {
-      setFeedback(`Thank you for your interview, ${userName}! 
+      // Generate real feedback using transcript
+      generateFeedback()
+      
+    } catch (error) {
+      console.error('Error ending session:', error)
+      setSessionStatus("ended")
+    }
+  }
 
-**Overall Rating:** Very Good
+  const generateFeedback = async () => {
+    try {
+      // Convert transcript to text
+      const transcriptText = transcript.map(entry => 
+        `${entry.speaker}: ${entry.text}`
+      ).join('\n')
 
-**Strengths:**
-- Clear and structured answers
-- Good preparation evident
-- Confident presentation
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: transcriptText,
+          job_description: jobDescription,
+          user_name: userName
+        })
+      })
 
-**Areas for Improvement:**
-- Include more concrete examples from practice
-- Take a brief pause to think when facing difficult questions
-- Ask your own questions at the end of the interview
-
-**Recommendation:** You are well prepared for real job interviews!`)
-    }, 3000)
+      const data = await response.json()
+      if (data.success) {
+        setFeedback(data.feedback)
+      } else {
+        setFeedback('Failed to generate feedback. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error generating feedback:', error)
+      setFeedback('Failed to generate feedback. Please try again.')
+    }
   }
 
   const handleNewInterview = () => {
@@ -153,6 +239,13 @@ export default function Dashboard() {
   }
 
   const getStatusText = () => {
+    if (conversation.status === "connected" && conversation.isSpeaking) {
+      return "AI Speaking..."
+    }
+    if (conversation.status === "connected" && !conversation.isSpeaking) {
+      return "Listening..."
+    }
+    
     switch (sessionStatus) {
       case "idle":
         return "Ready to Start"
@@ -252,7 +345,7 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {sessionStatus === "running" || sessionStatus === "connected" ? (
+                        {conversation.status === "connected" ? (
                           <Wifi className="w-5 h-5 text-green-500" />
                         ) : (
                           <WifiOff className="w-5 h-5 text-gray-400" />

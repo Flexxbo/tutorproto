@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { agent_id, action, message } = await request.json()
+    const { agent_id, action } = await request.json()
     const apiKey = process.env.ELEVENLABS_API_KEY
 
     if (!apiKey) {
@@ -12,44 +12,55 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // This is a placeholder for ElevenLabs Conversational AI API integration
-    // The actual implementation will depend on ElevenLabs' specific API endpoints
-    
-    if (action === 'start_conversation') {
-      // Initialize conversation with specific agent
-      return NextResponse.json({
-        success: true,
-        session_id: 'placeholder_session_id',
-        message: 'Conversation started'
-      })
-    }
+    if (action === 'get_signed_url') {
+      // Resolve environment variable name to actual agent ID
+      let actualAgentId = agent_id
+      if (agent_id.startsWith('ELEVEN_AGENT_ID_')) {
+        actualAgentId = process.env[agent_id]
+        if (!actualAgentId) {
+          return NextResponse.json(
+            { success: false, message: `Environment variable ${agent_id} not configured` },
+            { status: 500 }
+          )
+        }
+      }
 
-    if (action === 'send_message') {
-      // Send message to ElevenLabs and get response
-      return NextResponse.json({
-        success: true,
-        response: 'AI response placeholder',
-        audio_url: 'placeholder_audio_url'
-      })
-    }
+      // Generate signed URL for ElevenLabs Conversational AI
+      const requestHeaders: HeadersInit = new Headers()
+      requestHeaders.set("xi-api-key", apiKey)
 
-    if (action === 'end_conversation') {
-      // End conversation session
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${actualAgentId}`,
+        {
+          method: "GET",
+          headers: requestHeaders,
+        }
+      )
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`ElevenLabs API error: ${response.status} ${errorText}`)
+      }
+
+      const body = await response.json()
+      
       return NextResponse.json({
         success: true,
-        message: 'Conversation ended'
+        signed_url: body.signed_url,
+        agent_id: actualAgentId,
+        original_agent_ref: agent_id
       })
     }
 
     return NextResponse.json(
-      { success: false, message: 'Invalid action' },
+      { success: false, message: 'Invalid action. Use "get_signed_url"' },
       { status: 400 }
     )
 
   } catch (error) {
     console.error('ElevenLabs API error:', error)
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, message: `Failed to get signed URL: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     )
   }
