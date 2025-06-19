@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [lowCreditWarningShown, setLowCreditWarningShown] = useState(false)
   const [realTimeCredits, setRealTimeCredits] = useState(0) // Real-time credit tracking
   const [lastCreditUpdate, setLastCreditUpdate] = useState(0) // Track when we last updated DB
+  const [isIntentionalEnd, setIsIntentionalEnd] = useState(false) // New flag to track intentional endings
   const transcriptContainerRef = useRef<HTMLDivElement>(null) // For auto-scrolling transcript only
   const router = useRouter()
 
@@ -51,7 +52,16 @@ export default function Dashboard() {
     },
     onDisconnect: () => {
       console.log('Disconnected from ElevenLabs')
-      setSessionStatus("ended")
+      
+      // Check if this was an intentional ending
+      if (isIntentionalEnd) {
+        console.log('Intentional disconnect - ending session')
+        setSessionStatus("ended")
+        setIsIntentionalEnd(false) // Reset flag
+      } else {
+        console.log('Unintentional disconnect - treating as pause')
+        setSessionStatus("paused")
+      }
     },
     onMessage: (message) => {
       console.log('Message received:', message)
@@ -67,7 +77,16 @@ export default function Dashboard() {
     },
     onError: (error) => {
       console.error('ElevenLabs error:', error)
-      setSessionStatus("ended")
+      
+      // Check if this was an intentional ending
+      if (isIntentionalEnd) {
+        console.log('Error during intentional ending - ending session')
+        setSessionStatus("ended")
+        setIsIntentionalEnd(false) // Reset flag
+      } else {
+        console.log('Unintentional error - treating as pause')
+        setSessionStatus("paused")
+      }
     }
   })
 
@@ -133,6 +152,7 @@ export default function Dashboard() {
           if (newCredits <= 0) {
             setTimeout(async () => {
               alert('Credits depleted. Ending interview automatically.')
+              setIsIntentionalEnd(true) // Set flag for automatic credit depletion ending
               await handleEndSession()
             }, 100)
           }
@@ -337,6 +357,7 @@ export default function Dashboard() {
 
   const handlePauseSession = async () => {
     try {
+      // Don't set intentional end flag for pause - we want to allow resume
       // End the current conversation to actually pause
       await conversation.endSession()
       setSessionStatus("paused")
@@ -347,6 +368,9 @@ export default function Dashboard() {
 
   const handleEndSession = async () => {
     try {
+      // Set intentional end flag so the disconnect handler knows this was intentional
+      setIsIntentionalEnd(true)
+      
       // End ElevenLabs conversation
       await conversation.endSession()
       
@@ -365,6 +389,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error ending session:', error)
       setSessionStatus("ended")
+      setIsIntentionalEnd(false) // Reset flag on error
     }
   }
 
@@ -463,6 +488,7 @@ export default function Dashboard() {
     setIsResuming(false)
     setLowCreditWarningShown(false)
     setLastCreditUpdate(0)
+    setIsIntentionalEnd(false) // Reset intentional end flag for new interview
   }
 
   const formatTime = (seconds: number) => {
