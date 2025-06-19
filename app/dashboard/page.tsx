@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useConversation } from "@elevenlabs/react"
 import { Button } from "@/components/ui/button"
@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [lowCreditWarningShown, setLowCreditWarningShown] = useState(false)
   const [realTimeCredits, setRealTimeCredits] = useState(0) // Real-time credit tracking
   const [lastCreditUpdate, setLastCreditUpdate] = useState(0) // Track when we last updated DB
+  const transcriptContainerRef = useRef<HTMLDivElement>(null) // For auto-scrolling transcript only
   const router = useRouter()
 
   // ElevenLabs conversation hook
@@ -54,11 +55,12 @@ export default function Dashboard() {
     },
     onMessage: (message) => {
       console.log('Message received:', message)
+      console.log('Message source:', message.source) // Debug log for speaker identification
       
       // Add message to transcript
       const timestamp = new Date().toLocaleTimeString()
       setTranscript(prev => [...prev, {
-        speaker: message.source === 'user' ? 'You' : 'AI Trainer',
+        speaker: message.source, // Store the actual source value from ElevenLabs
         text: message.message || '',
         time: timestamp
       }])
@@ -192,6 +194,13 @@ export default function Dashboard() {
       clearInterval(creditUpdateInterval)
     }
   }, [sessionStatus, lastCreditUpdate, lowCreditWarningShown])
+
+  // Auto-scroll transcript container to bottom when new messages arrive
+  useEffect(() => {
+    if (transcriptContainerRef.current) {
+      transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight
+    }
+  }, [transcript])
 
   const buildDynamicVariables = () => {
     // Build transcript for previous
@@ -721,6 +730,40 @@ export default function Dashboard() {
                       )}
                     </Card>
                   </div>
+
+                  {/* Full Transcript - Only show after interview ends */}
+                  {sessionStatus === "ended" && transcript.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Full Interview Transcript</Label>
+                      <Card className="p-4 bg-gray-50 dark:bg-gray-800 max-h-96 overflow-y-auto">
+                        <div className="space-y-4">
+                          {transcript.map((entry, index) => (
+                            <div 
+                              key={index}
+                              className={`p-4 rounded-lg ${
+                                entry.speaker === 'user' 
+                                  ? 'bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500'
+                                  : 'bg-blue-100 dark:bg-blue-900/40 border-l-4 border-blue-500' 
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`font-semibold text-sm ${
+                                  entry.speaker === 'user' 
+                                    ? 'text-green-700 dark:text-green-300'
+                                    : 'text-blue-700 dark:text-blue-300' 
+                                }`}>
+                                  {entry.speaker === 'user' ? (userName || 'You') : 'Interviewer'}
+                                </span>
+                                <span className="text-xs text-muted-foreground">{entry.time}</span>
+                                <span className="text-xs opacity-75">[{entry.speaker}]</span>
+                              </div>
+                              <p className="text-sm leading-relaxed">{entry.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -733,20 +776,32 @@ export default function Dashboard() {
                   <CardDescription>Here you can see in real-time what is being said</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64 overflow-y-auto space-y-3">
+                  <div 
+                    ref={transcriptContainerRef}
+                    className="h-64 overflow-y-auto space-y-3"
+                  >
                     {transcript.length === 0 ? (
                       <p className="text-muted-foreground text-sm">
                         The transcript will appear here once the interview starts...
                       </p>
                     ) : (
                       transcript.map((entry, index) => (
-                        <div key={index} className="space-y-1">
+                        <div 
+                          key={index} 
+                          className={`p-3 rounded-lg space-y-1 ${
+                            entry.speaker === 'user' 
+                              ? 'bg-green-50 dark:bg-green-950/30 border-l-4 border-green-400'
+                              : 'bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-400' 
+                          }`}
+                        >
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-medium">{entry.speaker}</span>
+                            <span className="font-medium">
+                              {entry.speaker === 'user' ? (userName || 'You') : 'Interviewer'}
+                            </span>
                             <span>{entry.time}</span>
+                            <span className="text-xs opacity-75">[{entry.speaker}]</span>
                           </div>
                           <p className="text-sm">{entry.text}</p>
-                          {index < transcript.length - 1 && <Separator className="my-2" />}
                         </div>
                       ))
                     )}
