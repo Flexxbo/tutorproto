@@ -418,20 +418,32 @@ export default function Dashboard() {
         `${entry.speaker}: ${entry.text}`
       ).join('\n')
 
-      const response = await fetch('/api/feedback', {
+      // Use profile-specific feedback if profile is selected, otherwise fallback to simple
+      const apiEndpoint = selectedProfile ? '/api/feedback/profile' : '/api/feedback'
+      
+      const requestBody = {
+        transcript: transcriptText,
+        job_description: jobDescription,
+        user_name: userName,
+        ...(selectedProfile && { profile_id: selectedProfile })
+      }
+
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: transcriptText,
-          job_description: jobDescription,
-          user_name: userName
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const data = await response.json()
       if (data.success) {
         setFeedback(data.feedback)
+        
+        // Log feedback strategy used for debugging
+        if (data.feedback_type) {
+          console.log(`Feedback generated using strategy: ${data.feedback_type}`)
+        }
       } else {
+        console.error('Feedback generation failed:', data.message)
         setFeedback('Failed to generate feedback. Please try again.')
       }
     } catch (error) {
