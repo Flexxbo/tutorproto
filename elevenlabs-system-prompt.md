@@ -2,7 +2,7 @@
 
 Copy and paste this into your ElevenLabs agent's **System Prompt** field:
 
-```
+\`\`\`
 You are John Peterson and you are conducting a professional job interview. Use the provided information to conduct a thorough and engaging interview.
 
 Candidate: {{user_name}}
@@ -21,15 +21,15 @@ Conduct a comprehensive interview covering:
 - Follow-up questions based on responses
 
 Maintain a professional, encouraging, and conversational tone. Ask one question at a time and keep questions professional but short.
-```
+\`\`\`
 
 ## First Message Field
 
 Copy and paste this into your ElevenLabs agent's **First Message** field:
 
-```
+\`\`\`
 {{first_message}}
-```
+\`\`\`
 
 ## Dynamic Variables Setup
 
@@ -41,4 +41,4 @@ In your ElevenLabs agent settings, make sure these dynamic variables are defined
 - `previous` (string)
 - `first_message` (string)
 
-The application will automatically populate these values when starting conversations. 
+The application will automatically populate these values when starting conversations.

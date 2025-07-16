@@ -8,13 +8,13 @@
 
 Install the package in your project through package manager.
 
-```shell
+\`\`\`shell
 npm install @elevenlabs/react
 # or
 yarn add @elevenlabs/react
 # or
 pnpm install @elevenlabs/react
-```
+\`\`\`
 
 ## Usage
 
@@ -26,27 +26,27 @@ React hook for managing websocket connection and audio usage for ElevenLabs Conv
 
 First, initialize the Conversation instance.
 
-```tsx
+\`\`\`tsx
 const conversation = useConversation();
-```
+\`\`\`
 
 Note that Conversational AI requires microphone access.
 Consider explaining and allowing access in your apps UI before the Conversation kicks off.
 
-```js
+\`\`\`js
 // call after explaining to the user why the microphone access is needed
 await navigator.mediaDevices.getUserMedia({ audio: true });
-```
+\`\`\`
 
 #### Options
 
 The Conversation can be initialized with certain options. Those are all optional.
 
-```tsx
+\`\`\`tsx
 const conversation = useConversation({
   /* options object */
 });
-```
+\`\`\`
 
 - **onConnect** - handler called when the conversation websocket connection is established.
 - **onDisconnect** - handler called when the conversation websocket connection is ended.
@@ -62,10 +62,10 @@ The method accepts options object, with the `url` or `agentId` option being requ
 
 Agent ID can be acquired through [ElevenLabs UI](https://elevenlabs.io/app/conversational-ai) and is always necessary.
 
-```js
+\`\`\`js
 const conversation = useConversation();
 const conversationId = await conversation.startSession({ url });
-```
+\`\`\`
 
 For the public agents, define `agentId` - no signed link generation necessary.
 
@@ -73,7 +73,7 @@ In case the conversation requires authorization, use the REST API to generate si
 
 `startSession` returns promise resolving to `conversationId`. The value is a globally unique conversation ID you can use to identify separate conversations.
 
-```js
+\`\`\`js
 // your server
 const requestHeaders: HeadersInit = new Headers();
 requestHeaders.set("xi-api-key", process.env.XI_API_KEY); // use your ElevenLabs API key
@@ -92,39 +92,39 @@ if (!response.ok) {
 
 const body = await response.json();
 const url = body.signed_url; // use this URL for startSession method.
-```
+\`\`\`
 
 **endSession**
 
 A method to manually end the conversation. The method will end the conversation and disconnect from websocket.
 
-```js
+\`\`\`js
 await conversation.endSession();
-```
+\`\`\`
 
 **setVolume**
 
 A method to set the output volume of the conversation. Accepts object with volume field between 0 and 1.
 
-```js
+\`\`\`js
 await conversation.setVolume({ volume: 0.5 });
-```
+\`\`\`
 
 **status**
 
 A React state containing the current status of the conversation.
 
-```js
+\`\`\`js
 const { status } = useConversation();
 console.log(status); // "connected" or "disconnected"
-```
+\`\`\`
 
 **isSpeaking**
 
 A React state containing the information of whether the agent is currently speaking.
 This is helpful for indicating the mode in your UI.
 
-```js
+\`\`\`js
 const { isSpeaking } = useConversation();
 console.log(isSpeaking); // boolean
-``` 
+\`\`\`

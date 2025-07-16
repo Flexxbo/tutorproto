@@ -11,9 +11,9 @@
 ## Environment Configuration
 
 1. **Copy the environment template**:
-   ```bash
+   \`\`\`bash
    cp .env.example .env
-   ```
+   \`\`\`
 
 2. **Fill in your credentials**:
    - `SUPABASE_URL`: Your Supabase project URL
@@ -41,8 +41,8 @@ Each profile is linked to a specific ElevenLabs agent ID from your environment v
 
 ## Running the Application
 
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
-The application will be available at http://localhost:3000 
+The application will be available at http://localhost:3000

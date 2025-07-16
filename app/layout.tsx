@@ -7,9 +7,9 @@ import { ThemeProvider } from "next-themes"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Tutorproto",
-  description: "AI-powered interview training platform",
-  generator: 'v0.dev'
+  title: "Next.js Community Starter",
+  description: "A modern Next.js starter with theme support",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({

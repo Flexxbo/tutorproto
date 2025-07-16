@@ -16,4 +16,4 @@ async function generateHash() {
   console.log('Old hash validation:', isOldHashValid);
 }
 
-generateHash().catch(console.error); 
+generateHash().catch(console.error);

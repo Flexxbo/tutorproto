@@ -30,4 +30,4 @@ export function clearAuthUser(): void {
 
 export function isAuthenticated(): boolean {
   return getAuthUser() !== null
-} 
+}

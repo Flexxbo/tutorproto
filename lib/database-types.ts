@@ -37,4 +37,4 @@ export interface TranscriptEntry {
   text: string
   timestamp: string
   created_at: string
-} 
+}
